@@ -1,0 +1,32 @@
+def parsingFunction(data: String):List[(Int, String)]=
+  {
+    val line = data.split("}]")
+    val cast = line(0)
+    val crew = line(1)
+    val id = line(2).split(",")(1).toInt
+
+    val casts = cast.split("'name'")
+    val castList = for (i <- 1 to casts.size-1){ (id, casts(i).split("\\'")(1)) }
+    
+	val crews = crew.split("'name'")
+    val crewList = for (i <- 1 to crews.size-1){ (id, crews(i).split("\\'")(1)) }
+
+    val finalCastList = castList.toList
+    val finalCrewList = crewList.toList
+
+    finalCastList ::: finalCrewList
+  }
+  
+  val creditData = spark.read.format("csv").option("header", "true").load("/user/maria_dev/credits.csv")
+  
+  val parsedCredit = creditData.flatMap(temp => parsingFunction(temp)).toDF("id", "name")
+
+  val revenueData = spark.read.format("csv").option("header", "true").load("/user/maria_dev/movies_metadata.csv")
+  val idRev = revenueData.select("id", "revenue")
+  val creditRevenue = parsedCredit.join(idRev,parsedCredit.col("id") === idRev.col("id"))
+
+  val woId = creditRevenue.drop("id")
+  val revenueLong = woId.withColumn("revenueLong", woId.col("revenue").cast("long"))
+  val result = revenueLong.drop("revenue")
+  result.groupBy("name").sum("revenueLong").orderBy("revenueLong", ascending = True ).show(5)
+  
